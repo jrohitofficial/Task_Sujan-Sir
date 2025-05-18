@@ -4,4 +4,4 @@
 
 ## Demo Video
 
-![Book Inventory Manager Demo](./demo-video.mp4)
+![Book Inventory Manager Demo](./Video_2025-05-18_230553.mp4)

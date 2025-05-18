@@ -1,0 +1,19 @@
+/* Custom styles to complement Bootstrap */
+.book-card {
+    transition: transform 0.2s;
+    height: 100%;
+}
+
+.book-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.book-price {
+    font-weight: bold;
+    color: var(--bs-info);
+}
+
+.actions-column {
+    width: 150px;
+}

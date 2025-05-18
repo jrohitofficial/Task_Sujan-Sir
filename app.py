@@ -1,12 +1,12 @@
 import os
 from datetime import datetime
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 
 # Create the Flask app
 app = Flask(__name__)
 
-# Configure SQLAlchemy to use SQLite in-memory database for now
+# Configure SQLAlchemy to use SQLite in-memory database
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
@@ -31,19 +31,6 @@ class Book(db.Model):
             'publishedDate': self.publishedDate.isoformat()
         }
 
-# Create all database tables
-with app.app_context():
-    db.create_all()
-    
-    # Add sample data if the table is empty
-    if not Book.query.first():
-        sample_books = [
-            Book(name="JavaScript: The Good Parts", author="Douglas Crockford", price=29.99, publishedDate=datetime(2008, 5, 1)),
-            Book(name="Clean Code", author="Robert C. Martin", price=39.99, publishedDate=datetime(2008, 8, 1))
-        ]
-        db.session.add_all(sample_books)
-        db.session.commit()
-
 # Validation function
 def validate_book_data(data):
     errors = []
@@ -54,14 +41,112 @@ def validate_book_data(data):
     if not data.get('author') or not isinstance(data.get('author'), str) or data.get('author').strip() == '':
         errors.append('Author is required and must be a non-empty string')
     
-    if data.get('price') is None or not isinstance(data.get('price'), (int, float)) or float(data.get('price')) < 0:
-        errors.append('Price is required and must be a non-negative number')
+    try:
+        if data.get('price') is None or float(data.get('price')) < 0:
+            errors.append('Price is required and must be a non-negative number')
+    except (ValueError, TypeError):
+        errors.append('Price must be a valid number')
     
     return errors
 
-# API Routes
+# Create all database tables and add sample data
+with app.app_context():
+    db.create_all()
+    
+    # Add sample data if the table is empty
+    if not Book.query.first():
+        sample_books = [
+            Book(name="JavaScript: The Good Parts", author="Douglas Crockford", price=29.99, 
+                 publishedDate=datetime(2008, 5, 1)),
+            Book(name="Clean Code", author="Robert C. Martin", price=39.99, 
+                 publishedDate=datetime(2008, 8, 1))
+        ]
+        db.session.add_all(sample_books)
+        db.session.commit()
+
+# Web Interface Routes
 @app.route('/')
-def index():
+def home():
+    books = Book.query.all()
+    return render_template('index.html', books=books)
+
+@app.route('/books/add', methods=['GET'])
+def add_book_form():
+    return render_template('add_book.html')
+
+@app.route('/books/add', methods=['POST'])
+def add_book():
+    data = {
+        'name': request.form.get('name'),
+        'author': request.form.get('author'),
+        'price': request.form.get('price'),
+        'publishedDate': request.form.get('publishedDate')
+    }
+    
+    errors = validate_book_data(data)
+    if errors:
+        for error in errors:
+            flash(error, 'danger')
+        return redirect(url_for('add_book_form'))
+    
+    new_book = Book(
+        name=data['name'],
+        author=data['author'],
+        price=float(data['price']),
+        publishedDate=datetime.fromisoformat(data['publishedDate']) if data['publishedDate'] else datetime.utcnow()
+    )
+    
+    db.session.add(new_book)
+    db.session.commit()
+    
+    flash('Book added successfully!', 'success')
+    return redirect(url_for('home'))
+
+@app.route('/books/<int:book_id>/edit', methods=['GET'])
+def edit_book_form(book_id):
+    book = Book.query.get_or_404(book_id)
+    return render_template('edit_book.html', book=book)
+
+@app.route('/books/<int:book_id>/edit', methods=['POST'])
+def edit_book(book_id):
+    book = Book.query.get_or_404(book_id)
+    
+    data = {
+        'name': request.form.get('name'),
+        'author': request.form.get('author'),
+        'price': request.form.get('price'),
+        'publishedDate': request.form.get('publishedDate')
+    }
+    
+    errors = validate_book_data(data)
+    if errors:
+        for error in errors:
+            flash(error, 'danger')
+        return redirect(url_for('edit_book_form', book_id=book_id))
+    
+    book.name = data['name']
+    book.author = data['author']
+    book.price = float(data['price'])
+    book.publishedDate = datetime.fromisoformat(data['publishedDate']) if data['publishedDate'] else book.publishedDate
+    
+    db.session.commit()
+    
+    flash('Book updated successfully!', 'success')
+    return redirect(url_for('home'))
+
+@app.route('/books/<int:book_id>/delete', methods=['POST'])
+def delete_book_web(book_id):
+    book = Book.query.get_or_404(book_id)
+    
+    db.session.delete(book)
+    db.session.commit()
+    
+    flash('Book deleted successfully!', 'success')
+    return redirect(url_for('home'))
+
+# API Routes
+@app.route('/api')
+def api_index():
     return jsonify({
         'message': 'Book Management API',
         'endpoints': {
@@ -73,9 +158,8 @@ def index():
         }
     })
 
-# Get all books
 @app.route('/api/books', methods=['GET'])
-def get_all_books():
+def api_get_all_books():
     try:
         books = Book.query.all()
         return jsonify({
@@ -90,9 +174,8 @@ def get_all_books():
             'message': 'Failed to retrieve books'
         }), 500
 
-# Get a book by ID
 @app.route('/api/books/<int:id>', methods=['GET'])
-def get_book_by_id(id):
+def api_get_book_by_id(id):
     try:
         book = Book.query.get(id)
         if not book:
@@ -112,9 +195,8 @@ def get_book_by_id(id):
             'message': 'Failed to retrieve book'
         }), 500
 
-# Create a new book
 @app.route('/api/books', methods=['POST'])
-def create_book():
+def api_create_book():
     try:
         data = request.json
         errors = validate_book_data(data)
@@ -148,9 +230,8 @@ def create_book():
             'message': 'Failed to create book'
         }), 500
 
-# Update a book
 @app.route('/api/books/<int:id>', methods=['PUT'])
-def update_book(id):
+def api_update_book(id):
     try:
         data = request.json
         book = Book.query.get(id)
@@ -189,9 +270,8 @@ def update_book(id):
             'message': 'Failed to update book'
         }), 500
 
-# Delete a book
 @app.route('/api/books/<int:id>', methods=['DELETE'])
-def delete_book(id):
+def api_delete_book(id):
     try:
         book = Book.query.get(id)
         
@@ -214,6 +294,3 @@ def delete_book(id):
             'error': True,
             'message': 'Failed to delete book'
         }), 500
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)

@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+
+{% block title %}Edit Book{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h3>Edit Book</h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('edit_book', book_id=book.bookId) }}">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Book Title</label>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ book.name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="author" class="form-label">Author</label>
+                        <input type="text" class="form-control" id="author" name="author" value="{{ book.author }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="price" class="form-label">Price ($)</label>
+                        <input type="number" class="form-control" id="price" name="price" step="0.01" min="0" value="{{ book.price }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="publishedDate" class="form-label">Publication Date</label>
+                        <input type="date" class="form-control" id="publishedDate" name="publishedDate" 
+                               value="{{ book.publishedDate.strftime('%Y-%m-%d') }}">
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('home') }}" class="btn btn-secondary me-md-2">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Update Book</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
